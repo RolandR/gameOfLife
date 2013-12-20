@@ -9,20 +9,23 @@
 			border-collapse: collapse;
 		}
 		td{
-			height: 10px;
-			width: 10px;
+			height: 2px;
+			width: 2px;
 			border: 1px #777777 solid;
 		}
 		
 		.alive{
-			background-color: #00FF00;
+			background-color: #000000;
 		}
 		.dead{
-			background-color: #000000;
+			background-color: #FFFFFF;
 		}
 	</style>
 </head>
 <body>
+	<div id="controls">
+	
+	</div>
 	<table id="world">
 		<tbody id="worldTbody"></tbody>
 	</table>
@@ -31,27 +34,84 @@
 
 <script type="text/javascript">
 	
+	var rules = {
+		 birth: [3]
+		,death: [0, 1, 4, 5, 6, 7, 8] 
+	}
+	
 	function Cell(){
 		var currentState = false;
-		var nextState = false;
-		var htmlElement;
+		if(Math.round(Math.random())){
+			currentState = true;
+		}
 		
-		var neighbors = []; // 0: North, 1: East, 2: South, 3: West
+		var nextState = currentState;
+		var previousState = false;
+		var cellHtmlElement;
+		var xPos;
+		var yPos;
+		
+		// 0 1 2
+		// 7 * 3
+		// 6 5 4
+		
+		var neighbors = [];
 		
 		function calculateNext(){
+			var liveNeighbors = countLiveNeighbors();
+			if(currentState){
+				for(var i in rules.death){
+					if(rules.death[i] == liveNeighbors){
+						dieInNextGen();
+					}
+				}
+			} else {
+				for(var i in rules.birth){
+					if(rules.birth[i] == liveNeighbors){
+						liveInNextGen();
+					}
+				}
+			}
+		}
 		
+		function countLiveNeighbors(){
+			var count = 0;
+			for(var i in neighbors){
+				if(neighbors[i] != null){
+					if(neighbors[i].getState()){
+						count++;
+					}
+				}
+			}
+			return count;
+		}
+		
+		function applyNext(){
+			previousState = currentState;
+			currentState = nextState;
+			render();
 		}
 		
 		function getState(){
 			return currentState;
 		}
 		
+		function dieInNextGen(){
+			nextState = false;
+		}
+		
+		function liveInNextGen(){
+			nextState = true;
+		}
+		
 		function flip(){
 			currentState = !currentState;
 		}
 		
-		function setHtmlElement(nElement){
-			htmlElement = nElement;
+		function setHtmlElement(y, x){
+			//cellHtmlElement = document.getElementById(y+'-'+x);
+			yPos = y;
+			xPos = x;
 		}
 		
 		function setNeighbors(nNeighbors){
@@ -60,12 +120,12 @@
 		
 		function render(){
 			if(currentState){
-				htmlElement.className = 'alive';
+				document.getElementById(yPos+'-'+xPos).className = 'alive';
 			} else {
-				htmlElement.className = 'dead';
+				document.getElementById(yPos+'-'+xPos).className = 'dead';
 			}
-			console.log(htmlElement.id);
-			console.log(htmlElement);
+			//console.log(cellHtmlElement.id);
+			//console.log(cellHtmlElement);
 		}
 		
 		return {
@@ -75,6 +135,7 @@
 			,setNeighbors:		setNeighbors
 			,setHtmlElement: 	setHtmlElement
 			,render:			render
+			,applyNext:			applyNext
 		};
 	}
 	
@@ -96,10 +157,19 @@
 		function setNeighbors(){
 			for(var y = 0; y < params.height; y++){
 				for(var x = 0; x < params.width; x++){
+					
+					// 0 1 2
+					// 7 * 3
+					// 6 5 4
+					
 					grid[y][x].setNeighbors([
-						 getGridCell(y-1, x)
-						,getGridCell(y, x-1)
+						 getGridCell(y-1, x-1)
+						,getGridCell(y-1, x)
+						,getGridCell(y-1, x+1)
+						,getGridCell(y, x+1)
+						,getGridCell(y+1, x+1)
 						,getGridCell(y+1, x)
+						,getGridCell(y+1, x-1)
 						,getGridCell(y, x-1)
 					]);
 				}
@@ -113,8 +183,8 @@
 				var row = document.getElementById('row'+y);
 				for(var x = 0; x < params.width; x++){
 					row.innerHTML += '<td id="'+y+'-'+x+'"></td>';
-					var cell = document.getElementById(y+'-'+x);
-					grid[y][x].setHtmlElement(cell);
+					grid[y][x].setHtmlElement(y, x);
+					//console.log('Generated cell '+y+'-'+x);
 				}
 			}
 			render();
@@ -123,6 +193,7 @@
 		function render(){
 			for(var y = 0; y < params.height; y++){
 				for(var x = 0; x < params.width; x++){
+					//console.log('Rendering cell '+y+', '+x);
 					grid[y][x].render();
 				}
 			}
@@ -149,29 +220,54 @@
 			
 			if(posX < 0){
 				if(params.wrapEdges){
-					return row[row.length + posX];
+					return row[(row.length + posX)];
 				} else {
 					return null;
 				}
 			} else if(posX >= row.length){
 				if(params.wrapEdges){
-					return grid[posX - row.length];
+					return row[posX - row.length];
 				} else {
 					return null;
 				}
 			} else {
-				return row[posY];
+				return row[posX];
 			}
 			
 			return null;
 		}
+		
+		function step(){
+			for(var y = 0; y < params.height; y++){
+				for(var x = 0; x < params.width; x++){
+					grid[y][x].calculateNext();
+					grid[y][x].applyNext();
+				}
+			}
+		}
+		
+		function loop(){
+			var loopInterval = setInterval(world.step, 20);
+		}
+		
+		return {
+			 step: step
+			,loop: loop
+		};
 	}
 	
 	var world = new World({
-		 height: 20
-		,width: 20
+		 height: 100
+		,width: 100
 		,wrapEdges: false
 		,renderTbody: document.getElementById('worldTbody')
 	});
+	
+	function initialiseControls(){
+		document.getElementById('controls').innerHTML += '<button onclick="world.step()">Step</button>';
+		document.getElementById('controls').innerHTML += '<button onclick="world.loop()">Loop</button>';
+	}
+	
+	initialiseControls();
 	
 </script>
